@@ -1,0 +1,15 @@
+
+{
+  "name": "routecore",
+  "version": "1.0.0",
+  "description": "A network routing and failure simulation engine",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.0"
+  }
+}
