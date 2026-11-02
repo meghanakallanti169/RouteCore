@@ -55,63 +55,83 @@ RouteCore/
 
 ## Algorithms
 
-### BFS
-Explores the graph level by level.
+### 1. Breadth-First Search (BFS)
+
+Explores the graph level by level to find a path with the minimum number of edges.
+
 - Time Complexity: O(V + E)
 
-### DFS
-Explores a path deeply before backtracking.
+### 2. Depth-First Search (DFS)
+
+Explores a path deeply before backtracking to explore other possible paths.
+
 - Time Complexity: O(V + E)
 
-### Dijkstra
-Finds the minimum-cost path between two routers.
+### 3. Dijkstra's Algorithm
+
+Finds the minimum-cost path between two routers using weighted connections.
+
 - Current implementation: O(V² + E)
+- Supports non-negative edge weights.
 
-### Network Recovery
-Simulates link failures and recalculates alternative routes using Dijkstra.
+### 4. Network Recovery
 
-## Installation
+Simulates network connection failures and recalculates alternative routes using Dijkstra's shortest-path algorithm.
 
-Clone the repository:
+## Installation and Setup
+
+### Prerequisites
+
+- Node.js
+- npm
+- Git
+
+### Clone the Repository
 
 ```bash
 git clone https://github.com/meghanakallanti169/RouteCore.git
 ```
 
-Navigate to the project:
+Navigate to the project directory:
 
 ```bash
 cd RouteCore
 ```
 
-Install root dependencies:
+### Install Root Dependencies
 
 ```bash
 npm install
 ```
 
-Install frontend dependencies:
+### Install Frontend Dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-Start the application:
+### Run the Application
 
 ```bash
 npm run dev
 ```
 
+Open the local URL displayed in your terminal, usually:
+
+```text
+http://localhost:5173/
+```
+
 ## Running Tests
 
-From the project root:
+Navigate to the project root and execute:
 
 ```bash
 npm test
 ```
 
-Watch mode:
+To run tests in watch mode:
 
 ```bash
 npm run test:watch
@@ -119,7 +139,7 @@ npm run test:watch
 
 ## Test Results
 
-Currently, all 21 automated tests pass.
+All 21 automated tests are currently passing.
 
 | Module | Tests |
 |---|---:|
@@ -133,10 +153,23 @@ Currently, all 21 automated tests pass.
 
 - A* shortest-path algorithm
 - Dynamic router creation
+- Dynamic connection management
 - Network congestion simulation
 - Multiple packet transmission
 - Algorithm performance comparison
 - Advanced routing protocol simulation
+
+## Learning Outcomes
+
+Through RouteCore, the project explores:
+
+- Graph data structures and algorithms
+- Weighted graph traversal
+- Shortest-path optimization
+- Network failure simulation
+- Modular JavaScript architecture
+- Frontend visualization of algorithms
+- Automated testing and version control
 
 ## Author
 
