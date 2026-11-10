@@ -1,9 +1,11 @@
-
 class Graph {
     constructor() {
         this.adjacencyList = {};
         this.activeConnections = new Set();
         this.weights = {};
+
+        // Routers that are temporarily unavailable
+        this.failedRouters = new Set();
     }
 
     addRouter(router) {
@@ -51,7 +53,9 @@ class Graph {
             this.removeConnection(router, neighbor);
         }
 
+        this.failedRouters.delete(router);
         delete this.adjacencyList[router];
+
         return true;
     }
 
@@ -111,20 +115,72 @@ class Graph {
         return true;
     }
 
-    getNeighbors(router) {
+    // ----------------------------------
+    // ROUTER FAILURE AND RECOVERY
+    // ----------------------------------
+
+    failRouter(router) {
         if (!Object.hasOwn(this.adjacencyList, router)) {
+            return false;
+        }
+
+        if (this.failedRouters.has(router)) {
+            return false;
+        }
+
+        this.failedRouters.add(router);
+        return true;
+    }
+
+    restoreRouter(router) {
+        if (!Object.hasOwn(this.adjacencyList, router)) {
+            return false;
+        }
+
+        if (!this.failedRouters.has(router)) {
+            return false;
+        }
+
+        this.failedRouters.delete(router);
+        return true;
+    }
+
+    isRouterFailed(router) {
+        return this.failedRouters.has(router);
+    }
+
+    getFailedRouters() {
+        return [...this.failedRouters];
+    }
+
+    isRouterActive(router) {
+        return (
+            Object.hasOwn(this.adjacencyList, router) &&
+            !this.failedRouters.has(router)
+        );
+    }
+
+    // ----------------------------------
+    // ACTIVE NEIGHBORS
+    // ----------------------------------
+
+    getNeighbors(router) {
+        if (!this.isRouterActive(router)) {
             return [];
         }
 
         return this.adjacencyList[router].filter(neighbor =>
             this.activeConnections.has(
                 this.getConnectionId(router, neighbor)
-            )
+            ) &&
+            this.isRouterActive(neighbor)
         );
     }
 
     getWeight(router1, router2) {
-        return this.weights[this.getConnectionId(router1, router2)];
+        return this.weights[
+            this.getConnectionId(router1, router2)
+        ];
     }
 
     getNetworkState() {
@@ -132,7 +188,8 @@ class Graph {
             routers: Object.keys(this.adjacencyList),
             connections: [...this.activeConnections],
             weights: { ...this.weights },
-            adjacencyList: this.adjacencyList
+            adjacencyList: this.adjacencyList,
+            failedRouters: [...this.failedRouters]
         };
     }
 }
