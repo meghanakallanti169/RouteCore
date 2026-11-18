@@ -1,7 +1,11 @@
 
 class Dijkstra {
     static findShortestPath(graph, start, target) {
-        const result = this.findShortestPathWithStats(graph, start, target);
+        const result = this.findShortestPathWithStats(
+            graph,
+            start,
+            target
+        );
 
         if (!result || result.path === null) {
             return null;
@@ -13,17 +17,31 @@ class Dijkstra {
         };
     }
 
-    static findShortestPathWithStats(graph, start, target) {
+    static findShortestPathWithStats(
+        graph,
+        start,
+        target,
+        options = {}
+    ) {
+        // Validate source and destination
         if (
-            !Object.hasOwn(graph.adjacencyList, start) ||
-            !Object.hasOwn(graph.adjacencyList, target)
+            !graph.isRouterActive(start) ||
+            !graph.isRouterActive(target)
         ) {
             return null;
         }
 
+        const recordSteps = options.recordSteps !== false;
+
+        // Include only active routers
+        const unvisited = new Set(
+            Object.keys(graph.adjacencyList).filter(
+                router => graph.isRouterActive(router)
+            )
+        );
+
         const distances = {};
         const previous = {};
-        const unvisited = new Set(Object.keys(graph.adjacencyList));
         const visitedNodes = [];
         const steps = [];
 
@@ -34,13 +52,21 @@ class Dijkstra {
 
         distances[start] = 0;
 
+        // Get reachable routers in the frontier
         const getFrontier = () =>
             [...unvisited]
-                .filter(router => Number.isFinite(distances[router]))
-                .sort((a, b) => distances[a] - distances[b]);
+                .filter(router =>
+                    Number.isFinite(distances[router])
+                )
+                .sort(
+                    (a, b) => distances[a] - distances[b]
+                );
 
+        // Reconstruct path
         const getPathTo = destination => {
-            if (!Number.isFinite(distances[destination])) return [];
+            if (!Number.isFinite(distances[destination])) {
+                return [];
+            }
 
             const path = [];
             let router = destination;
@@ -53,7 +79,10 @@ class Dijkstra {
             return path;
         };
 
+        // Record algorithm steps for visualization
         const recordStep = (current, action) => {
+            if (!recordSteps) return;
+
             steps.push({
                 step: steps.length,
                 current,
@@ -65,12 +94,19 @@ class Dijkstra {
             });
         };
 
-        recordStep(null, `Start at router ${start}. Set its distance to 0.`);
+        if (recordSteps) {
+            recordStep(
+                null,
+                `Start at router ${start}. Set its distance to 0.`
+            );
+        }
 
+        // Main Dijkstra algorithm
         while (unvisited.size > 0) {
             let current = null;
             let smallestDistance = Infinity;
 
+            // Find the unvisited router with minimum distance
             for (const router of unvisited) {
                 if (distances[router] < smallestDistance) {
                     smallestDistance = distances[router];
@@ -78,32 +114,53 @@ class Dijkstra {
                 }
             }
 
+            // No more reachable routers
             if (current === null) {
-                recordStep(null, "No more reachable routers. Destination cannot be reached.");
+                if (recordSteps) {
+                    recordStep(
+                        null,
+                        "No more reachable routers. Destination cannot be reached."
+                    );
+                }
+
                 break;
             }
 
             unvisited.delete(current);
             visitedNodes.push(current);
 
-            recordStep(
-                current,
-                `Visit router ${current} with distance ${distances[current]}.`
-            );
-
-            if (current === target) {
+            if (recordSteps) {
                 recordStep(
                     current,
-                    `Destination ${target} reached. Shortest distance is ${distances[target]}.`
+                    `Visit router ${current} with distance ${distances[current]}.`
                 );
+            }
+
+            // Stop when destination is reached
+            if (current === target) {
+                if (recordSteps) {
+                    recordStep(
+                        current,
+                        `Destination ${target} reached. Shortest distance is ${distances[target]}.`
+                    );
+                }
+
                 break;
             }
 
+            // Explore active neighbors
             for (const neighbor of graph.getNeighbors(current)) {
-                if (!unvisited.has(neighbor)) continue;
+                if (!unvisited.has(neighbor)) {
+                    continue;
+                }
 
-                const edgeWeight = graph.getWeight(current, neighbor);
-                const newDistance = distances[current] + edgeWeight;
+                const edgeWeight = graph.getWeight(
+                    current,
+                    neighbor
+                );
+
+                const newDistance =
+                    distances[current] + edgeWeight;
 
                 if (newDistance < distances[neighbor]) {
                     const oldDistance = distances[neighbor];
@@ -111,11 +168,17 @@ class Dijkstra {
                     distances[neighbor] = newDistance;
                     previous[neighbor] = current;
 
-                    recordStep(
-                        current,
-                        `Update ${neighbor}: ${oldDistance === Infinity ? "∞" : oldDistance} → ${newDistance} through ${current}.`
-                    );
-                } else {
+                    if (recordSteps) {
+                        recordStep(
+                            current,
+                            `Update ${neighbor}: ${
+                                oldDistance === Infinity
+                                    ? "∞"
+                                    : oldDistance
+                            } → ${newDistance} through ${current}.`
+                        );
+                    }
+                } else if (recordSteps) {
                     recordStep(
                         current,
                         `Keep ${neighbor}'s distance at ${distances[neighbor]}; ${newDistance} is not shorter.`
@@ -124,6 +187,7 @@ class Dijkstra {
             }
         }
 
+        // Destination is unreachable
         if (distances[target] === Infinity) {
             return {
                 path: null,
@@ -134,6 +198,7 @@ class Dijkstra {
             };
         }
 
+        // Return shortest path and statistics
         return {
             path: getPathTo(target),
             distance: distances[target],

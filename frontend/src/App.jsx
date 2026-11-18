@@ -3,6 +3,9 @@ import Graph from "../../src/graph/Graph.js";
 import Dijkstra from "../../src/algorithms/Dijkstra.js";
 import Traversal from "../../src/algorithms/Traversal.js";
 import AStar from "../../src/algorithms/AStar.js";
+import BellmanFord from "../../src/algorithms/BellmanFord.js";
+import FloydWarshall from "../../src/algorithms/FloydWarshall.js";
+import BenchmarkPanel from "./BenchmarkPanel.jsx";
 import "./App.css";
 
 const initialRouters = [
@@ -220,6 +223,41 @@ function App() {
       result = AStar.findPathWithStats(
         network, source, destination, allRouterPositions
       );
+    } else if (algorithm === "Bellman-Ford") {
+      result = BellmanFord.findShortestPathWithStats(
+        network, source, destination
+      );
+    } else if (algorithm === "Floyd-Warshall") {
+      // Floyd-Warshall computes routes between every pair of active routers.
+      // Reuse its all-pairs result for this selected source and destination.
+      const allPairsResult = FloydWarshall.findAllPairsWithStats(network);
+
+      if (
+        !allPairsResult ||
+        allPairsResult.negativeCycle ||
+        !Object.hasOwn(allPairsResult.distances, source) ||
+        !Object.hasOwn(allPairsResult.distances, destination) ||
+        !Number.isFinite(allPairsResult.distances[source][destination])
+      ) {
+        return null;
+      }
+
+      const path = FloydWarshall.reconstructPath(
+        allPairsResult.next,
+        source,
+        destination
+      );
+
+      if (!path) return null;
+
+      result = {
+        path,
+        distance: allPairsResult.distances[source][destination],
+        hops: path.length - 1,
+        visitedCount: allPairsResult.visitedCount,
+        visitedNodes: allPairsResult.visitedNodes,
+        steps: allPairsResult.steps,
+      };
     } else {
       return null;
     }
@@ -275,6 +313,8 @@ function App() {
       DFS: calculateAlgorithm("DFS"),
       Dijkstra: calculateAlgorithm("Dijkstra"),
       "A*": calculateAlgorithm("A*"),
+      "Bellman-Ford": calculateAlgorithm("Bellman-Ford"),
+      "Floyd-Warshall": calculateAlgorithm("Floyd-Warshall"),
     };
   }
 
@@ -284,7 +324,7 @@ function App() {
     const route = calculateAlgorithm(selectedAlgorithm);
 
     setResult(route);
-    // All four algorithms now provide step records for the shared visualizer.
+    // All six algorithms provide step records for the shared visualizer.
     setVisualizationSteps(route?.steps || []);
     setCurrentStepIndex(0);
     setIsStepPlaying(false);
@@ -602,12 +642,76 @@ function App() {
       getComponents(routerId).length > components.length
     );
 
+    // Tarjan's bridge-finding algorithm identifies connections whose
+    // removal increases the number of connected components.
+    let discoveryTime = 0;
+    const discovery = new Map();
+    const low = new Map();
+    const bridges = [];
+
+    function findBridges(routerId, parentId = null) {
+      discovery.set(routerId, ++discoveryTime);
+      low.set(routerId, discoveryTime);
+
+      for (const neighbor of network.getNeighbors(routerId)) {
+        if (!activeRouters.includes(neighbor)) continue;
+
+        if (!discovery.has(neighbor)) {
+          findBridges(neighbor, routerId);
+          low.set(routerId, Math.min(low.get(routerId), low.get(neighbor)));
+
+          if (low.get(neighbor) > discovery.get(routerId)) {
+            const a = routerId < neighbor ? routerId : neighbor;
+            const b = routerId < neighbor ? neighbor : routerId;
+            bridges.push({ a, b, weight: network.getWeight(a, b) });
+          }
+        } else if (neighbor !== parentId) {
+          low.set(routerId, Math.min(low.get(routerId), discovery.get(neighbor)));
+        }
+      }
+    }
+
+    for (const routerId of activeRouters) {
+      if (!discovery.has(routerId)) findBridges(routerId);
+    }
+
+    // If the network is fragmented, suggest the shortest geometric link
+    // between each pair of components. This is a recommendation, not a
+    // connection that is automatically added to the graph.
+    const recommendedConnections = [];
+    for (let i = 0; i < components.length; i++) {
+      for (let j = i + 1; j < components.length; j++) {
+        let best = null;
+
+        for (const a of components[i]) {
+          for (const b of components[j]) {
+            const positionA = routers.find(router => router.id === a);
+            const positionB = routers.find(router => router.id === b);
+            if (!positionA || !positionB) continue;
+
+            const distance = Math.hypot(
+              positionA.x - positionB.x,
+              positionA.y - positionB.y
+            );
+
+            if (!best || distance < best.distance) {
+              best = { a, b, distance: Number(distance.toFixed(2)) };
+            }
+          }
+        }
+
+        if (best) recommendedConnections.push(best);
+      }
+    }
+
     return {
       activeRouterCount: activeRouters.length,
       componentCount: components.length,
       connected: activeRouters.length > 0 && components.length === 1,
       resilienceScore,
       criticalRouters,
+      criticalConnections: bridges,
+      recommendedConnections,
       components,
     };
   }
@@ -1227,6 +1331,8 @@ function App() {
                 <option value="A*">A* Search</option>
                 <option value="BFS">Breadth-First Search (BFS)</option>
                 <option value="DFS">Depth-First Search (DFS)</option>
+                <option value="Bellman-Ford">Bellman-Ford</option>
+                <option value="Floyd-Warshall">Floyd-Warshall</option>
               </select>
             </div>
 
@@ -1600,29 +1706,13 @@ function App() {
               <div className="panel-heading">
                 <div>
                   <h3>Algorithm Comparison</h3>
-                  <p>Compare routes calculated by all four algorithms</p>
+                  <p>Compare routes calculated by all six algorithms</p>
                 </div>
               </div>
 
               <div className="connection-list">
-                {renderComparisonCard(
-                  "BFS",
-                  comparisonResults.BFS
-                )}
-
-                {renderComparisonCard(
-                  "DFS",
-                  comparisonResults.DFS
-                )}
-
-                {renderComparisonCard(
-                  "Dijkstra",
-                  comparisonResults.Dijkstra
-                )}
-
-                {renderComparisonCard(
-                  "A*",
-                  comparisonResults["A*"]
+                {Object.entries(comparisonResults).map(([algorithm, algorithmResult]) =>
+                  renderComparisonCard(algorithm, algorithmResult)
                 )}
               </div>
 
@@ -1639,6 +1729,8 @@ function App() {
             <p>Manage network connections and simulate failures</p>
           </div>
         </div>
+
+        <BenchmarkPanel />
 
         <div className="management-grid">
           <div className="management-card">
@@ -1882,75 +1974,153 @@ function App() {
               </div>
 
               <div className="connection-list" style={{ marginTop: "18px" }}>
-                <h4>Router importance</h4>
-                <p>Critical routers are articulation points whose removal increases the number of connected components.</p>
+                <h4>Network resilience and failure analysis</h4>
+                <p>
+                  Articulation points and bridges are single points of failure:
+                  removing one can split a connected part of the network.
+                </p>
+
+                <div className="performance-grid">
+                  <div className="performance-metric">
+                    <span>Connected components</span>
+                    <strong>{analysis.componentCount}</strong>
+                  </div>
+                  <div className="performance-metric">
+                    <span>Resilience score</span>
+                    <strong>{analysis.resilienceScore}%</strong>
+                  </div>
+                  <div className="performance-metric">
+                    <span>Critical routers</span>
+                    <strong>{analysis.criticalRouters.length}</strong>
+                  </div>
+                  <div className="performance-metric">
+                    <span>Critical connections</span>
+                    <strong>{analysis.criticalConnections.length}</strong>
+                  </div>
+                </div>
+
                 <div className="connection-item">
                   <div>
-                    <strong>Critical routers</strong>
-                    <p>{analysis.criticalRouters.length > 0 ? `Potential single points of failure: ${analysis.criticalRouters.join(", ")}` : "No critical routers detected in the current topology"}</p>
+                    <strong>Critical routers (articulation points)</strong>
+                    <p>
+                      {analysis.criticalRouters.length
+                        ? analysis.criticalRouters.join(", ")
+                        : "No articulation points detected"}
+                    </p>
                   </div>
-                  <strong>{analysis.criticalRouters.length}</strong>
                 </div>
+
                 <div className="connection-item">
                   <div>
-                    <strong>Resilience score</strong>
-                    <p>Percentage of operational routers in the largest connected component</p>
+                    <strong>Critical connections (bridges)</strong>
+                    <p>
+                      {analysis.criticalConnections.length
+                        ? analysis.criticalConnections.map(edge => `${edge.a} — ${edge.b}`).join(", ")
+                        : "No bridge connections detected"}
+                    </p>
                   </div>
-                  <strong>{analysis.resilienceScore}%</strong>
                 </div>
+
+                <h4 style={{ marginTop: "18px" }}>Failure impact simulation</h4>
+                <p>
+                  The following results are calculated without changing your live network.
+                  They show how many connected components would remain after each failure.
+                </p>
+
+                {analysis.criticalRouters.length === 0 &&
+                analysis.criticalConnections.length === 0 ? (
+                  <p>No single router or active connection currently increases network fragmentation when removed.</p>
+                ) : (
+                  <>
+                    {analysis.criticalRouters.map(routerId => {
+                      const afterCount = analysis.components.length === 0
+                        ? 0
+                        : (() => {
+                            const remaining = routers
+                              .map(router => router.id)
+                              .filter(id => network.isRouterActive(id) && id !== routerId);
+                            const seen = new Set();
+                            let count = 0;
+                            for (const id of remaining) {
+                              if (seen.has(id)) continue;
+                              count++;
+                              const queue = [id];
+                              seen.add(id);
+                              while (queue.length) {
+                                const current = queue.shift();
+                                network.getNeighbors(current).forEach(next => {
+                                  if (next !== routerId && !seen.has(next)) {
+                                    seen.add(next);
+                                    queue.push(next);
+                                  }
+                                });
+                              }
+                            }
+                            return count;
+                          })();
+                      return (
+                        <div className="connection-item" key={`impact-router-${routerId}`}>
+                          <span>Simulate failure of router {routerId}</span>
+                          <strong>{analysis.componentCount} → {afterCount} components</strong>
+                        </div>
+                      );
+                    })}
+                    {analysis.criticalConnections.map(edge => {
+                      const seen = new Set();
+                      let afterCount = 0;
+                      for (const router of routers) {
+                        if (!network.isRouterActive(router.id) || seen.has(router.id)) continue;
+                        afterCount++;
+                        const queue = [router.id];
+                        seen.add(router.id);
+                        while (queue.length) {
+                          const current = queue.shift();
+                          network.getNeighbors(current).forEach(next => {
+                            const isRemovedEdge =
+                              (current === edge.a && next === edge.b) ||
+                              (current === edge.b && next === edge.a);
+                            if (!isRemovedEdge && !seen.has(next)) {
+                              seen.add(next);
+                              queue.push(next);
+                            }
+                          });
+                        }
+                      }
+                      return (
+                        <div className="connection-item" key={`impact-edge-${edge.a}-${edge.b}`}>
+                          <span>Simulate failure of {edge.a} — {edge.b}</span>
+                          <strong>{analysis.componentCount} → {afterCount} components</strong>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
+                <h4 style={{ marginTop: "18px" }}>Suggested recovery connections</h4>
+                <p>
+                  When the network is split, these are the closest router pairs
+                  from different components based on their displayed positions.
+                  Review the suggestions and add a link manually if appropriate.
+                </p>
+                {analysis.recommendedConnections.length === 0 ? (
+                  <p>No additional inter-component connection is currently needed.</p>
+                ) : (
+                  analysis.recommendedConnections.map((edge, index) => (
+                    <div className="connection-item" key={`suggestion-${edge.a}-${edge.b}`}>
+                      <div>
+                        <strong>{edge.a} — {edge.b}</strong>
+                        <p>Suggested geometric distance: {edge.distance} units</p>
+                      </div>
+                      <strong>Suggestion {index + 1}</strong>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           );
         })()}
 
-        {(() => {
-          const analysis = calculateNetworkResilience();
-          return (
-            <div className="management-card" style={{ marginBottom: "18px" }}>
-              <h3>Network Resilience Analysis</h3>
-              <div className="connection-list">
-                <div className="connection-item">
-                  <div>
-                    <strong>Network connectivity</strong>
-                    <p>
-                      {analysis.activeRouterCount === 0
-                        ? "No active routers"
-                        : analysis.connected
-                          ? "All active routers are connected"
-                          : "Network is split into separate components"}
-                    </p>
-                  </div>
-                  <strong>{analysis.connected ? "Connected" : "Disconnected"}</strong>
-                </div>
-                <div className="connection-item">
-                  <div>
-                    <strong>Resilience score</strong>
-                    <p>Share of active routers in the largest connected group</p>
-                  </div>
-                  <strong>{analysis.resilienceScore}%</strong>
-                </div>
-                <div className="connection-item">
-                  <div>
-                    <strong>Connected components</strong>
-                    <p>Separate groups that can communicate internally</p>
-                  </div>
-                  <strong>{analysis.componentCount}</strong>
-                </div>
-                <div className="connection-item">
-                  <div>
-                    <strong>Critical routers</strong>
-                    <p>Routers whose removal increases network fragmentation</p>
-                  </div>
-                  <strong>
-                    {analysis.criticalRouters.length > 0
-                      ? analysis.criticalRouters.join(", ")
-                      : "None detected"}
-                  </strong>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+
 
 
 

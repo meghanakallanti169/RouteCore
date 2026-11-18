@@ -2,15 +2,21 @@
 class Traversal {
     // Breadth-First Search
     static BFS(graph, start, target) {
-        const result = Traversal.BFSWithStats(graph, start, target);
+        const result = Traversal.BFSWithStats(
+            graph,
+            start,
+            target
+        );
+
         return result ? result.path : null;
     }
 
     // BFS with performance statistics and visualization steps
     static BFSWithStats(graph, start, target) {
+        // Validate active routers
         if (
-            !Object.hasOwn(graph.adjacencyList, start) ||
-            !Object.hasOwn(graph.adjacencyList, target)
+            !graph.isRouterActive(start) ||
+            !graph.isRouterActive(target)
         ) {
             return null;
         }
@@ -20,7 +26,6 @@ class Traversal {
         const visitedNodes = [];
         const steps = [];
 
-        // Record the initial state
         steps.push({
             step: 0,
             current: null,
@@ -99,15 +104,21 @@ class Traversal {
 
     // Depth-First Search
     static DFS(graph, start, target) {
-        const result = Traversal.DFSWithStats(graph, start, target);
+        const result = Traversal.DFSWithStats(
+            graph,
+            start,
+            target
+        );
+
         return result ? result.path : null;
     }
 
     // DFS with performance statistics and visualization steps
     static DFSWithStats(graph, start, target) {
+        // Validate active routers
         if (
-            !Object.hasOwn(graph.adjacencyList, start) ||
-            !Object.hasOwn(graph.adjacencyList, target)
+            !graph.isRouterActive(start) ||
+            !graph.isRouterActive(target)
         ) {
             return null;
         }
